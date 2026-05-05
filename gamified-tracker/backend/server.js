@@ -2,6 +2,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import connectDB from './db.js';
+import userRoutes from './userRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -20,7 +21,7 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'success', message: 'API is running...' });
 });
 
-// We will add route imports here later (e.g., app.use('/api/users', userRoutes))
+app.use('/api/users', userRoutes);
 
 const PORT = process.env.PORT || 5000;
 
