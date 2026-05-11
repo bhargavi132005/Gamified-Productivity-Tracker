@@ -12,7 +12,7 @@ export const registerUser = async (req, res) => {
   const userExists = await User.findOne({ email });
   if (userExists) return res.status(400).json({ message: 'User already exists' });
 
-  const user = await User.create({ username, email, password });
+  const user = await User.create({ username, email, password, lastLogin: new Date(), streak: 1 });
   if (user) {
     res.status(201).json({
       _id: user._id,
@@ -20,6 +20,7 @@ export const registerUser = async (req, res) => {
       email: user.email,
       xp: user.xp,
       level: user.level,
+      streak: user.streak,
       token: generateToken(user._id),
     });
   } else {
@@ -32,12 +33,31 @@ export const loginUser = async (req, res) => {
 
   const user = await User.findOne({ email });
   if (user && (await bcrypt.compare(password, user.password))) {
+    const now = new Date();
+    if (user.lastLogin) {
+      const last = new Date(user.lastLogin);
+      now.setHours(0, 0, 0, 0);
+      last.setHours(0, 0, 0, 0);
+      const diffDays = Math.round((now - last) / 86400000); // 86400000 ms in a day
+
+      if (diffDays === 1) {
+        user.streak += 1;
+      } else if (diffDays > 1) {
+        user.streak = 1;
+      }
+    } else {
+      user.streak = 1;
+    }
+    user.lastLogin = new Date();
+    await user.save();
+
     res.json({
       _id: user._id,
       username: user.username,
       email: user.email,
       xp: user.xp,
       level: user.level,
+      streak: user.streak,
       token: generateToken(user._id),
     });
   } else {
