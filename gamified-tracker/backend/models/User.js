@@ -23,6 +23,14 @@ const userSchema = new mongoose.Schema({
   level: {
     type: Number,
     default: 1,
+  },
+  streak: {
+    type: Number,
+    default: 1,
+  },
+  lastLogin: {
+    type: Date,
+    default: Date.now,
   }
 }, { timestamps: true });
 
