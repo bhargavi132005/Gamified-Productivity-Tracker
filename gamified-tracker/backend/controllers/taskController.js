@@ -27,18 +27,30 @@ export const updateTask = async (req, res) => {
   task.isCompleted = req.body.isCompleted ?? task.isCompleted;
   const updatedTask = await task.save();
 
-  // Gamification Logic: Add XP if task wasn't completed before but is now
-  if (task.isCompleted && !wasCompleted) {
+  // Gamification Logic: Add/Remove XP based on status change
+  if (task.isCompleted !== wasCompleted) {
     const user = await User.findById(req.user._id);
-    const xpToAdd = task.type === 'daily' ? 10 : 5;
+    const xpModifier = task.type === 'daily' ? 10 : 5;
     
-    user.xp += xpToAdd;
-    
-    // Level up logic
-    const maxXP = user.level * 50;
-    if (user.xp >= maxXP) {
-      user.level += 1;
-      user.xp -= maxXP;
+    if (task.isCompleted) {
+      user.xp += xpModifier;
+      // Level up logic
+      const maxXP = user.level * 50;
+      if (user.xp >= maxXP) {
+        user.level += 1;
+        user.xp -= maxXP;
+      }
+    } else {
+      user.xp -= xpModifier;
+      // Level down logic
+      if (user.xp < 0) {
+        if (user.level > 1) {
+          user.level -= 1;
+          user.xp += user.level * 50;
+        } else {
+          user.xp = 0;
+        }
+      }
     }
     await user.save();
   }
