@@ -17,10 +17,6 @@ const taskSchema = new mongoose.Schema({
   isCompleted: {
     type: Boolean,
     default: false,
-  },
-  streak: {
-    type: Number,
-    default: 0,
   }
 }, { timestamps: true });
 
