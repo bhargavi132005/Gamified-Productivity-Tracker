@@ -25,6 +25,7 @@ export const updateTask = async (req, res) => {
 
   const wasCompleted = task.isCompleted;
   task.isCompleted = req.body.isCompleted ?? task.isCompleted;
+  task.title = req.body.title || task.title;
   const updatedTask = await task.save();
 
   // Gamification Logic: Add/Remove XP based on status change
