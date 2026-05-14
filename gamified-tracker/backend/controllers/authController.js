@@ -68,3 +68,34 @@ export const loginUser = async (req, res) => {
 export const getMe = async (req, res) => {
   res.json(req.user);
 };
+
+export const updateUserProfile = async (req, res) => {
+  const user = await User.findById(req.user._id);
+
+  if (user) {
+    user.username = req.body.username || user.username;
+    user.email = req.body.email || user.email;
+
+    if (req.body.password) {
+      if (req.body.currentPassword && await bcrypt.compare(req.body.currentPassword, user.password)) {
+        user.password = req.body.password;
+      } else {
+        return res.status(401).json({ message: 'Invalid current password' });
+      }
+    }
+
+    const updatedUser = await user.save();
+
+    res.json({
+      _id: updatedUser._id,
+      username: updatedUser.username,
+      email: updatedUser.email,
+      xp: updatedUser.xp,
+      level: updatedUser.level,
+      streak: updatedUser.streak,
+      token: generateToken(updatedUser._id),
+    });
+  } else {
+    res.status(404).json({ message: 'User not found' });
+  }
+};
