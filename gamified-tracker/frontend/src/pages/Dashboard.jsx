@@ -5,11 +5,14 @@ import axios from 'axios';
 import {
   FiHome, FiTrendingUp, FiAward, FiSettings, FiLogOut,
   FiZap, FiCheckCircle, FiClock, FiStar, FiMenu, FiX, FiTrash2,
-  FiUser, FiMail, FiLock, FiShield, FiCamera
+  FiUser, FiMail, FiLock, FiShield, FiCamera, FiEdit2
 } from 'react-icons/fi';
 import { FaFire } from 'react-icons/fa';
 import { AuthContext } from '../context/AuthContext';
 import confetti from 'canvas-confetti';
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+} from 'recharts';
 
 const Dashboard = () => {
   const { user, logout, updateUser } = useContext(AuthContext);
@@ -19,6 +22,9 @@ const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [profileData, setProfileData] = useState({ username: '', email: '' });
   const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '' });
+  const [settingsMessage, setSettingsMessage] = useState({ type: '', text: '' });
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [editTaskTitle, setEditTaskTitle] = useState('');
   const navigate = useNavigate();
 
   // Dynamic user data with level and XP
@@ -29,12 +35,6 @@ const Dashboard = () => {
     streak: user?.streak || 1,
     tasksCompleted: tasks.filter(t => t.isCompleted).length,
     tasksPending: tasks.filter(t => !t.isCompleted).length,
-    achievements: [
-      { id: 1, name: 'First Steps', icon: '👣', earned: true },
-      { id: 2, name: 'Week Warrior', icon: '⚔️', earned: true },
-      { id: 3, name: 'Perfect Month', icon: '📅', earned: false },
-      { id: 4, name: 'Level Master', icon: '👑', earned: false },
-    ]
   };
 
   const containerVariants = {
@@ -146,6 +146,36 @@ const Dashboard = () => {
     }
   };
 
+  const startEditing = (task, e) => {
+    e.stopPropagation();
+    setEditingTaskId(task._id);
+    setEditTaskTitle(task.title);
+  };
+
+  const cancelEditing = (e) => {
+    e?.stopPropagation();
+    setEditingTaskId(null);
+    setEditTaskTitle('');
+  };
+
+  const saveEdit = async (task, e) => {
+    e?.stopPropagation();
+    if (!editTaskTitle.trim() || editTaskTitle === task.title) {
+      setEditingTaskId(null);
+      return;
+    }
+    const updatedTitle = editTaskTitle.trim();
+    setTasks(prev => prev.map(t => t._id === task._id ? { ...t, title: updatedTitle } : t));
+    setEditingTaskId(null);
+    try {
+      const config = { headers: { Authorization: `Bearer ${user.token}` } };
+      await axios.put(`http://localhost:5000/api/tasks/${task._id}`, { title: updatedTitle }, config);
+    } catch (error) {
+      console.error('Error updating task title', error);
+      fetchTasks();
+    }
+  };
+
   const handleDeleteTask = async (taskId, e) => {
     e.stopPropagation(); // prevent triggering complete task toggle
     try {
@@ -162,8 +192,72 @@ const Dashboard = () => {
     navigate('/login');
   };
 
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    setSettingsMessage({ type: '', text: '' });
+    try {
+      const config = { headers: { Authorization: `Bearer ${user.token}` } };
+      const { data } = await axios.put('http://localhost:5000/api/auth/profile', profileData, config);
+      updateUser(data);
+      setSettingsMessage({ type: 'success', text: 'Profile updated successfully!' });
+    } catch (error) {
+      setSettingsMessage({ type: 'error', text: error.response?.data?.message || 'Failed to update profile' });
+    }
+  };
+
+  const handleUpdatePassword = async (e) => {
+    e.preventDefault();
+    setSettingsMessage({ type: '', text: '' });
+    if (!passwordData.currentPassword || !passwordData.newPassword) {
+      return setSettingsMessage({ type: 'error', text: 'Please fill in all password fields' });
+    }
+    try {
+      const config = { headers: { Authorization: `Bearer ${user.token}` } };
+      await axios.put('http://localhost:5000/api/auth/profile', {
+        currentPassword: passwordData.currentPassword,
+        password: passwordData.newPassword
+      }, config);
+      setPasswordData({ currentPassword: '', newPassword: '' });
+      setSettingsMessage({ type: 'success', text: 'Password updated successfully!' });
+    } catch (error) {
+      setSettingsMessage({ type: 'error', text: error.response?.data?.message || 'Failed to update password' });
+    }
+  };
+
   const pendingQuests = tasks.filter(t => !t.isCompleted);
   const completedQuests = tasks.filter(t => t.isCompleted);
+
+  // Calculate chart data from actual tasks (last 7 days)
+  const chartData = [...Array(7)].map((_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    const dateString = d.toISOString().split('T')[0];
+    return {
+      name: d.toLocaleDateString('en-US', { weekday: 'short' }),
+      date: dateString,
+      completed: 0,
+      added: 0
+    };
+  });
+
+  tasks.forEach(task => {
+    const createdDate = new Date(task.createdAt).toISOString().split('T')[0];
+    const updatedDate = new Date(task.updatedAt).toISOString().split('T')[0];
+    const addedDay = chartData.find(d => d.date === createdDate);
+    if (addedDay) addedDay.added += 1;
+    if (task.isCompleted) {
+      const completedDay = chartData.find(d => d.date === updatedDate);
+      if (completedDay) completedDay.completed += 1;
+    }
+  });
+
+  const leaderboardData = [
+    { id: '1', username: 'TaskMaster', level: 15, xp: 750 },
+    { id: '2', username: 'ProductivityNinja', level: 12, xp: 620 },
+    { id: '3', username: 'FocusGuru', level: 8, xp: 410 },
+    { id: '4', username: 'SteadyGrinder', level: 5, xp: 250 },
+    { id: user?._id || 'currentUser', username: user?.username || 'You', level: userStats.level, xp: userStats.currentXP, isCurrentUser: true }
+  ].sort((a, b) => (b.level * 1000 + b.xp) - (a.level * 1000 + a.xp));
 
   const renderTaskCard = (task) => (
     <motion.div
@@ -198,15 +292,31 @@ const Dashboard = () => {
           )}
         </motion.div>
         <div>
-          <p
-            className={`font-semibold transition-all ${
-            task.isCompleted
-                ? 'text-gray-500 line-through'
-                : 'text-white'
-            }`}
-          >
-            {task.title}
-          </p>
+          {editingTaskId === task._id ? (
+            <input
+              type="text"
+              value={editTaskTitle}
+              onChange={(e) => setEditTaskTitle(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') saveEdit(task, e);
+                if (e.key === 'Escape') cancelEditing(e);
+              }}
+              onBlur={(e) => saveEdit(task, e)}
+              autoFocus
+              className="bg-slate-800 text-white px-3 py-1 rounded-lg border border-purple-500 focus:outline-none w-full"
+            />
+          ) : (
+            <p
+              className={`font-semibold transition-all ${
+              task.isCompleted
+                  ? 'text-gray-500 line-through'
+                  : 'text-white'
+              }`}
+            >
+              {task.title}
+            </p>
+          )}
         </div>
       </div>
       <div className="flex items-center gap-4">
@@ -216,13 +326,24 @@ const Dashboard = () => {
             +{task.type === 'daily' ? 10 : 5} XP
           </span>
         </div>
-        <button
-          onClick={(e) => handleDeleteTask(task._id, e)}
-          className="p-2 text-gray-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-          title="Delete Quest"
-        >
-          <FiTrash2 className="w-4 h-4" />
-        </button>
+        {editingTaskId !== task._id && (
+          <>
+            <button
+              onClick={(e) => startEditing(task, e)}
+              className="p-2 text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all"
+              title="Edit Quest"
+            >
+              <FiEdit2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={(e) => handleDeleteTask(task._id, e)}
+              className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+              title="Delete Quest"
+            >
+              <FiTrash2 className="w-4 h-4" />
+            </button>
+          </>
+        )}
       </div>
     </motion.div>
   );
@@ -466,116 +587,224 @@ const Dashboard = () => {
               </motion.div>
             </motion.div>
 
-            {/* Achievements section */}
-            <motion.div className="mb-8" variants={itemVariants}>
-              <h3 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
-                <FiAward className="w-6 h-6 text-yellow-400" />
-                Achievement Badges
-              </h3>
-              <motion.div
-                className="grid grid-cols-2 md:grid-cols-4 gap-4"
-                variants={containerVariants}
-              >
-                {userStats.achievements.map((achievement) => (
-                  <motion.div
-                    key={achievement.id}
-                    className={`glass-card-dark p-6 text-center space-y-2 cursor-pointer transition-all ${
-                      achievement.earned
-                        ? 'border border-yellow-500/50'
-                        : 'border border-slate-700/50 opacity-50'
-                    }`}
-                    variants={cardVariants}
-                    whileHover={achievement.earned ? "hover" : {}}
-                  >
-                    <div className="text-3xl">{achievement.icon}</div>
-                    <p className="text-sm font-semibold text-white">{achievement.name}</p>
-                    {!achievement.earned && (
-                      <p className="text-xs text-gray-500">Locked</p>
-                    )}
-                  </motion.div>
-                ))}
-              </motion.div>
-            </motion.div>
-
-            {/* Active tasks section */}
-            <motion.div className="mb-8" variants={itemVariants}>
-              <h3 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
-                <FiClock className="w-6 h-6 text-blue-400" />
-                Active Quests
-              </h3>
-              <motion.div
-                className="space-y-3"
-                variants={containerVariants}
-              >
-              {pendingQuests.length === 0 ? (
+            {/* Layout Grid for Quests and Leaderboard */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+              {/* Left Column: Quests & Call to Action */}
+              <div className="lg:col-span-2 space-y-8">
+                {/* Call to action */}
                 <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-center py-10 border border-dashed border-slate-700 rounded-xl bg-slate-800/30"
+                  className="glass-card-dark p-5 bg-gradient-to-r from-purple-600/10 to-blue-600/10 border border-purple-500/20"
+                  variants={itemVariants}
                 >
-                  <div className="text-4xl mb-3">🎯</div>
-                  <p className="text-gray-400 font-medium">No active quests.</p>
-                  <p className="text-sm text-gray-500 mt-1">Time to forge your destiny!</p>
+                  <p className="text-purple-300/80 text-sm font-semibold mb-3 flex items-center gap-2">
+                    <FiZap className="w-4 h-4" />
+                    Create a new task and start earning XP to level up!
+                  </p>
+                  <form onSubmit={handleCreateTask} className="flex gap-3">
+                    <input
+                      type="text"
+                      value={newTaskTitle}
+                      onChange={(e) => setNewTaskTitle(e.target.value)}
+                      placeholder="Enter a new habit or task..."
+                      className="input-field flex-1"
+                    />
+                    <motion.button
+                      type="submit"
+                      className="btn-primary px-6"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      Add
+                    </motion.button>
+                  </form>
                 </motion.div>
-              ) : (
-                <AnimatePresence>
-                  {pendingQuests.map(renderTaskCard)}
-                </AnimatePresence>
-              )}
-              </motion.div>
-            </motion.div>
 
-            {/* Completed tasks section */}
-            {completedQuests.length > 0 && (
-              <motion.div className="mb-8" variants={itemVariants}>
-                <h3 className="text-2xl font-bold text-gray-400 mb-4 flex items-center gap-2">
-                  <FiCheckCircle className="w-6 h-6 text-green-500" />
-                  Completed Quests
-                </h3>
-                <motion.div className="space-y-3" variants={containerVariants}>
-                  <AnimatePresence>
-                    {completedQuests.map(renderTaskCard)}
-                  </AnimatePresence>
+                {/* Active tasks section */}
+                <motion.div variants={itemVariants}>
+                  <h3 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
+                    <FiClock className="w-6 h-6 text-blue-400" />
+                    Active Quests
+                  </h3>
+                  <motion.div
+                    className="space-y-3"
+                    variants={containerVariants}
+                  >
+                  {pendingQuests.length === 0 ? (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="text-center py-10 border border-dashed border-slate-700 rounded-xl bg-slate-800/30"
+                    >
+                      <div className="text-4xl mb-3">🎯</div>
+                      <p className="text-gray-400 font-medium">No active quests.</p>
+                      <p className="text-sm text-gray-500 mt-1">Time to forge your destiny!</p>
+                    </motion.div>
+                  ) : (
+                    <AnimatePresence>
+                      {pendingQuests.map(renderTaskCard)}
+                    </AnimatePresence>
+                  )}
+                  </motion.div>
                 </motion.div>
-              </motion.div>
-            )}
 
-            {/* Call to action */}
-            <motion.div
-              className="glass-card-dark p-8 text-center space-y-4 bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-500/30"
-              variants={itemVariants}
-            >
-              <h4 className="text-2xl font-bold text-white">Ready for more challenges?</h4>
-              <p className="text-gray-400">
-                Create a new task and start earning XP to level up!
-              </p>
-            <form onSubmit={handleCreateTask} className="flex gap-2 max-w-md mx-auto mt-4">
-              <input
-                type="text"
-                value={newTaskTitle}
-                onChange={(e) => setNewTaskTitle(e.target.value)}
-                placeholder="Enter a new habit or task..."
-                className="input-field flex-1"
-              />
-              <motion.button
-                type="submit"
-                className="btn-primary"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                Add
-              </motion.button>
-            </form>
-            </motion.div>
+                {/* Completed tasks section */}
+                {completedQuests.length > 0 && (
+                  <motion.div variants={itemVariants}>
+                    <h3 className="text-2xl font-bold text-gray-400 mb-4 flex items-center gap-2">
+                      <FiCheckCircle className="w-6 h-6 text-green-500" />
+                      Completed Quests
+                    </h3>
+                    <motion.div className="space-y-3" variants={containerVariants}>
+                      <AnimatePresence>
+                        {completedQuests.map(renderTaskCard)}
+                      </AnimatePresence>
+                    </motion.div>
+                  </motion.div>
+                )}
+
+              </div>
+
+              {/* Right Column: Leaderboard */}
+              <div className="lg:col-span-1">
+                <motion.div variants={itemVariants} className="glass-card-dark p-6 h-full border border-slate-700/50">
+                  <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                    <span>🏆</span> Global Leaderboard
+                  </h3>
+                  <div className="space-y-3">
+                    {leaderboardData.map((player, index) => (
+                      <div
+                        key={player.id}
+                        className={`flex items-center justify-between p-3 rounded-xl border ${
+                          player.isCurrentUser
+                            ? 'bg-purple-600/20 border-purple-500/50'
+                            : 'bg-slate-800/30 border-slate-700/30 hover:border-slate-600 transition-colors'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                            index === 0 ? 'bg-yellow-500/20 text-yellow-500' :
+                            index === 1 ? 'bg-gray-300/20 text-gray-300' :
+                            index === 2 ? 'bg-orange-600/20 text-orange-500' :
+                            'bg-slate-700 text-gray-400'
+                          }`}>
+                            {index === 0 ? '1' : index === 1 ? '2' : index === 2 ? '3' : index + 1}
+                          </div>
+                          <div>
+                            <p className={`text-sm font-bold ${player.isCurrentUser ? 'text-purple-400' : 'text-white'}`}>
+                              {player.username}
+                            </p>
+                            <p className="text-xs text-gray-400">Level {player.level}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-purple-400">{player.xp} XP</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              </div>
+            </div>
             </>
             )}
 
             {/* Placeholders for other tabs */}
             {activeTab === 'Progress' && (
-              <motion.div variants={itemVariants} className="text-center py-20">
-                <FiTrendingUp className="w-16 h-16 mx-auto text-blue-400 mb-4 opacity-50" />
-                <h2 className="text-3xl font-bold text-white mb-2">Progress Analytics</h2>
-                <p className="text-gray-400">Detailed charts and statistics are coming in the next update!</p>
+              <motion.div variants={containerVariants} className="space-y-6 max-w-4xl mx-auto">
+                <div className="flex items-center gap-3 mb-8">
+                  <FiTrendingUp className="w-8 h-8 text-blue-400" />
+                  <h2 className="text-3xl font-bold text-white">Your Progress Analytics</h2>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Activity Chart */}
+                  <motion.div variants={itemVariants} className="glass-card-dark p-6 md:col-span-2 h-80">
+                    <h3 className="text-lg font-semibold text-gray-400 mb-6 uppercase flex items-center gap-2">
+                      <FiTrendingUp className="text-blue-400" /> 7-Day Quest Activity
+                    </h3>
+                    <ResponsiveContainer width="100%" height="85%">
+                      <AreaChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                          </linearGradient>
+                          <linearGradient id="colorAdded" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                        <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
+                        <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px', color: '#f8fafc' }}
+                          itemStyle={{ color: '#e2e8f0' }}
+                        />
+                        <Area type="monotone" dataKey="completed" name="Quests Conquered" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorCompleted)" />
+                        <Area type="monotone" dataKey="added" name="Quests Added" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorAdded)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </motion.div>
+
+                  {/* Overview Card */}
+                  <motion.div variants={itemVariants} className="glass-card-dark p-6">
+                    <h3 className="text-lg font-semibold text-gray-400 mb-4 uppercase">Overall Completion</h3>
+                    <div className="flex items-center justify-between">
+                      <div className="text-5xl font-black text-blue-400">
+                        {tasks.length > 0 ? Math.round((userStats.tasksCompleted / tasks.length) * 100) : 0}%
+                      </div>
+                      <div className="text-right">
+                        <p className="text-gray-400 text-sm">Total Quests</p>
+                        <p className="text-2xl font-bold text-white">{tasks.length}</p>
+                      </div>
+                    </div>
+                    <div className="w-full bg-slate-800 h-2 rounded-full mt-4 overflow-hidden">
+                      <motion.div 
+                        className="bg-gradient-to-r from-blue-500 to-cyan-400 h-2 rounded-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${tasks.length > 0 ? (userStats.tasksCompleted / tasks.length) * 100 : 0}%` }}
+                        transition={{ duration: 1, delay: 0.2 }}
+                      />
+                    </div>
+                  </motion.div>
+
+                  {/* XP Card */}
+                  <motion.div variants={itemVariants} className="glass-card-dark p-6">
+                    <h3 className="text-lg font-semibold text-gray-400 mb-4 uppercase">Experience Journey</h3>
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center border-b border-slate-700/50 pb-2">
+                        <span className="text-gray-400">Current Level</span>
+                        <span className="text-white font-bold text-xl">{userStats.level}</span>
+                      </div>
+                      <div className="flex justify-between items-center border-b border-slate-700/50 pb-2">
+                        <span className="text-gray-400">Current XP</span>
+                        <span className="text-purple-400 font-bold text-xl">{userStats.currentXP}</span>
+                      </div>
+                      <div className="flex justify-between items-center border-b border-slate-700/50 pb-2">
+                        <span className="text-gray-400">XP to Next Level</span>
+                        <span className="text-green-400 font-bold text-xl">{userStats.maxXP - userStats.currentXP} XP</span>
+                      </div>
+                    </div>
+                  </motion.div>
+
+                  {/* Task Breakdown */}
+                  <motion.div variants={itemVariants} className="glass-card-dark p-6 md:col-span-2">
+                    <h3 className="text-lg font-semibold text-gray-400 mb-4 uppercase">Quest Breakdown</h3>
+                    <div className="grid grid-cols-2 gap-4 text-center">
+                      <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+                        <FiCheckCircle className="w-8 h-8 text-green-400 mx-auto mb-2" />
+                        <p className="text-3xl font-bold text-white">{userStats.tasksCompleted}</p>
+                        <p className="text-sm text-gray-400 mt-1">Conquered</p>
+                      </div>
+                      <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+                        <FiClock className="w-8 h-8 text-blue-400 mx-auto mb-2" />
+                        <p className="text-3xl font-bold text-white">{userStats.tasksPending}</p>
+                        <p className="text-sm text-gray-400 mt-1">Active</p>
+                      </div>
+                    </div>
+                  </motion.div>
+                </div>
               </motion.div>
             )}
             {activeTab === 'Achievements' && (
@@ -591,6 +820,15 @@ const Dashboard = () => {
                   <FiSettings className="w-8 h-8 text-gray-400" />
                   <h2 className="text-3xl font-bold text-white">Account Settings</h2>
                 </div>
+
+                {settingsMessage.text && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+                    className={`p-4 rounded-xl text-sm font-semibold border ${settingsMessage.type === 'success' ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400'}`}
+                  >
+                    {settingsMessage.text}
+                  </motion.div>
+                )}
 
                 {/* Profile Section */}
                 <motion.div variants={itemVariants} className="glass-card-dark p-6 md:p-8">
@@ -615,7 +853,7 @@ const Dashboard = () => {
                     </div>
 
                     {/* Profile Form */}
-                    <div className="flex-1 space-y-4">
+                    <form onSubmit={handleUpdateProfile} className="flex-1 space-y-4">
                       <div className="space-y-2">
                         <label className="text-sm font-semibold text-gray-400 uppercase">Username</label>
                         <div className="relative">
@@ -630,8 +868,8 @@ const Dashboard = () => {
                           <input type="email" value={profileData.email} onChange={(e) => setProfileData({...profileData, email: e.target.value})} className="input-field pl-12 w-full bg-slate-900/50 border-slate-700" />
                         </div>
                       </div>
-                      <button className="btn-primary mt-4 py-2 px-6">Save Changes</button>
-                    </div>
+                      <button type="submit" className="btn-primary mt-4 py-2 px-6">Save Changes</button>
+                    </form>
                   </div>
                 </motion.div>
 
@@ -641,7 +879,7 @@ const Dashboard = () => {
                     <FiShield className="text-blue-400" /> Security & Password
                   </h3>
                   
-                  <div className="space-y-4 max-w-md">
+                  <form onSubmit={handleUpdatePassword} className="space-y-4 max-w-md">
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-gray-400 uppercase">Current Password</label>
                       <div className="relative">
@@ -656,8 +894,8 @@ const Dashboard = () => {
                         <input type="password" placeholder="••••••••" value={passwordData.newPassword} onChange={(e) => setPasswordData({...passwordData, newPassword: e.target.value})} className="input-field pl-12 w-full bg-slate-900/50 border-slate-700" />
                       </div>
                     </div>
-                    <button className="btn-primary mt-4 py-2 px-6 bg-gradient-to-r from-blue-600 to-cyan-600">Update Password</button>
-                  </div>
+                    <button type="submit" className="btn-primary mt-4 py-2 px-6 bg-gradient-to-r from-blue-600 to-cyan-600">Update Password</button>
+                  </form>
                 </motion.div>
               </motion.div>
             )}
