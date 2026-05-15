@@ -20,6 +20,10 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  avatar: {
+    type: String,
+    default: '',
+  },
   level: {
     type: Number,
     default: 1,
