@@ -31,6 +31,11 @@ export const updateTask = async (req, res) => {
   // Gamification Logic: Add/Remove XP based on status change
   if (task.isCompleted !== wasCompleted) {
     const user = await User.findById(req.user._id);
+    
+    // Safeguard: Initialize xp and level for older accounts where it might be missing/NaN
+    user.xp = Number(user.xp) || 0;
+    user.level = Number(user.level) || 1;
+
     const xpModifier = task.type === 'daily' ? 10 : 5;
     
     if (task.isCompleted) {
