@@ -20,7 +20,7 @@ const Dashboard = () => {
   const [tasks, setTasks] = useState([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [activeTab, setActiveTab] = useState('Dashboard');
-  const [profileData, setProfileData] = useState({ username: '', email: '' });
+  const [profileData, setProfileData] = useState({ username: '', email: '', avatar: '' });
   const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '' });
   const [settingsMessage, setSettingsMessage] = useState({ type: '', text: '' });
   const [editingTaskId, setEditingTaskId] = useState(null);
@@ -70,7 +70,7 @@ const Dashboard = () => {
   useEffect(() => {
     if (user) {
       fetchTasks();
-      setProfileData({ username: user.username, email: user.email });
+      setProfileData({ username: user.username, email: user.email, avatar: user.avatar || '' });
     }
   }, [user, fetchTasks]);
 
@@ -192,6 +192,17 @@ const Dashboard = () => {
     navigate('/login');
   };
 
+  const handleAvatarChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfileData({ ...profileData, avatar: reader.result });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
     setSettingsMessage({ type: '', text: '' });
@@ -251,13 +262,14 @@ const Dashboard = () => {
     }
   });
 
-  const leaderboardData = [
-    { id: '1', username: 'TaskMaster', level: 15, xp: 750 },
-    { id: '2', username: 'ProductivityNinja', level: 12, xp: 620 },
-    { id: '3', username: 'FocusGuru', level: 8, xp: 410 },
-    { id: '4', username: 'SteadyGrinder', level: 5, xp: 250 },
-    { id: user?._id || 'currentUser', username: user?.username || 'You', level: userStats.level, xp: userStats.currentXP, isCurrentUser: true }
-  ].sort((a, b) => (b.level * 1000 + b.xp) - (a.level * 1000 + a.xp));
+  const badges = [
+    { id: 1, name: 'First Blood', description: 'Conquer 1 quest', icon: '🩸', isUnlocked: userStats.tasksCompleted >= 1 },
+    { id: 2, name: 'Consistency', description: '3-day streak', icon: '🔥', isUnlocked: userStats.streak >= 3 },
+    { id: 3, name: 'Novice', description: 'Reach Level 5', icon: '🎒', isUnlocked: userStats.level >= 5 },
+    { id: 4, name: 'Quest Master', description: 'Conquer 10 quests', icon: '🗡️', isUnlocked: userStats.tasksCompleted >= 10 },
+    { id: 5, name: 'XP Hoarder', description: 'Earn 500 XP', icon: '💎', isUnlocked: userStats.currentXP >= 500 },
+    { id: 6, name: 'Legendary', description: 'Reach Level 10', icon: '👑', isUnlocked: userStats.level >= 10 },
+  ];
 
   const renderTaskCard = (task) => (
     <motion.div
@@ -398,7 +410,6 @@ const Dashboard = () => {
             {[
               { icon: FiHome, label: 'Dashboard', active: true },
               { icon: FiTrendingUp, label: 'Progress', active: false },
-              { icon: FiAward, label: 'Achievements', active: false },
               { icon: FiSettings, label: 'Settings', active: false },
             ].map((item, index) => (
               <motion.button
@@ -587,10 +598,8 @@ const Dashboard = () => {
               </motion.div>
             </motion.div>
 
-            {/* Layout Grid for Quests and Leaderboard */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-              {/* Left Column: Quests & Call to Action */}
-              <div className="lg:col-span-2 space-y-8">
+            {/* Layout for Quests and Call to Action */}
+            <div className="space-y-8 mb-8">
                 {/* Call to action */}
                 <motion.div
                   className="glass-card-dark p-5 bg-gradient-to-r from-purple-600/10 to-blue-600/10 border border-purple-500/20"
@@ -661,49 +670,6 @@ const Dashboard = () => {
                     </motion.div>
                   </motion.div>
                 )}
-
-              </div>
-
-              {/* Right Column: Leaderboard */}
-              <div className="lg:col-span-1">
-                <motion.div variants={itemVariants} className="glass-card-dark p-6 h-full border border-slate-700/50">
-                  <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                    <span>🏆</span> Global Leaderboard
-                  </h3>
-                  <div className="space-y-3">
-                    {leaderboardData.map((player, index) => (
-                      <div
-                        key={player.id}
-                        className={`flex items-center justify-between p-3 rounded-xl border ${
-                          player.isCurrentUser
-                            ? 'bg-purple-600/20 border-purple-500/50'
-                            : 'bg-slate-800/30 border-slate-700/30 hover:border-slate-600 transition-colors'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
-                            index === 0 ? 'bg-yellow-500/20 text-yellow-500' :
-                            index === 1 ? 'bg-gray-300/20 text-gray-300' :
-                            index === 2 ? 'bg-orange-600/20 text-orange-500' :
-                            'bg-slate-700 text-gray-400'
-                          }`}>
-                            {index === 0 ? '1' : index === 1 ? '2' : index === 2 ? '3' : index + 1}
-                          </div>
-                          <div>
-                            <p className={`text-sm font-bold ${player.isCurrentUser ? 'text-purple-400' : 'text-white'}`}>
-                              {player.username}
-                            </p>
-                            <p className="text-xs text-gray-400">Level {player.level}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-bold text-purple-400">{player.xp} XP</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              </div>
             </div>
             </>
             )}
@@ -717,6 +683,23 @@ const Dashboard = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Achievement Vault */}
+                  <motion.div variants={itemVariants} className="glass-card-dark p-6 md:col-span-2">
+                    <h3 className="text-lg font-semibold text-gray-400 mb-6 uppercase flex items-center gap-2">
+                      <FiAward className="text-yellow-400" /> Achievement Vault
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                      {badges.map(badge => (
+                        <div key={badge.id} className={`p-4 rounded-xl border flex flex-col items-center justify-center text-center transition-all duration-300 ${badge.isUnlocked ? 'bg-yellow-500/10 border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.2)]' : 'bg-slate-800/30 border-slate-700/50 opacity-50 grayscale hover:grayscale-0 hover:opacity-100 cursor-help'}`}>
+                          <div className="text-4xl mb-2">{badge.icon}</div>
+                          <p className={`text-sm font-bold ${badge.isUnlocked ? 'text-yellow-400' : 'text-gray-500'}`}>{badge.name}</p>
+                          <p className="text-xs text-gray-400 mt-1">{badge.description}</p>
+                          {!badge.isUnlocked && <div className="mt-2 text-xs font-semibold text-slate-500 flex items-center gap-1"><FiLock /> Locked</div>}
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+
                   {/* Activity Chart */}
                   <motion.div variants={itemVariants} className="glass-card-dark p-6 md:col-span-2 h-80">
                     <h3 className="text-lg font-semibold text-gray-400 mb-6 uppercase flex items-center gap-2">
@@ -807,13 +790,6 @@ const Dashboard = () => {
                 </div>
               </motion.div>
             )}
-            {activeTab === 'Achievements' && (
-              <motion.div variants={itemVariants} className="text-center py-20">
-                <FiAward className="w-16 h-16 mx-auto text-yellow-400 mb-4 opacity-50" />
-                <h2 className="text-3xl font-bold text-white mb-2">Achievement Vault</h2>
-                <p className="text-gray-400">Your legendary trophies will be displayed here soon.</p>
-              </motion.div>
-            )}
             {activeTab === 'Settings' && (
               <motion.div variants={containerVariants} className="space-y-6 max-w-4xl mx-auto">
                 <div className="flex items-center gap-3 mb-8">
@@ -839,17 +815,22 @@ const Dashboard = () => {
                   <div className="flex flex-col md:flex-row gap-8">
                     {/* Avatar Upload */}
                     <div className="flex flex-col items-center gap-4">
-                      <div className="relative group cursor-pointer">
+                      <input type="file" id="avatarUpload" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+                      <label htmlFor="avatarUpload" className="relative group cursor-pointer block">
                         <div className="w-32 h-32 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 flex items-center justify-center text-4xl font-bold text-white overflow-hidden border-4 border-slate-800 shadow-xl">
-                          {user?.username?.charAt(0).toUpperCase()}
+                          {profileData.avatar ? (
+                            <img src={profileData.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                          ) : (
+                            user?.username?.charAt(0).toUpperCase()
+                          )}
                         </div>
                         <div className="absolute inset-0 bg-black/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
                           <FiCamera className="w-8 h-8 text-white" />
                         </div>
-                      </div>
-                      <button className="text-sm text-purple-400 font-semibold hover:text-purple-300 transition-colors">
+                      </label>
+                      <label htmlFor="avatarUpload" className="text-sm text-purple-400 font-semibold hover:text-purple-300 transition-colors cursor-pointer">
                         Change Avatar
-                      </button>
+                      </label>
                     </div>
 
                     {/* Profile Form */}
